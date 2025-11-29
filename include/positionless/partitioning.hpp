@@ -1,6 +1,7 @@
 #pragma once
 
-#include <cassert>
+#include "positionless/detail/precondition.hpp"
+
 #include <concepts>
 #include <iterator>
 #include <utility>
@@ -107,37 +108,37 @@ inline size_t partitioning<Iterator>::parts_count() const noexcept {
 template <std::forward_iterator Iterator>
 inline std::pair<Iterator, Iterator>
 partitioning<Iterator>::part(size_t part_index) const noexcept {
-  assert(part_index < parts_count());
+  PRECONDITION(part_index < parts_count());
   return {boundaries_[part_index], boundaries_[part_index + 1]};
 }
 
 template <std::forward_iterator Iterator>
 inline bool partitioning<Iterator>::is_part_empty(size_t part_index) const noexcept {
-  assert(part_index < parts_count());
+  PRECONDITION(part_index < parts_count());
   auto [begin, end] = part(part_index);
   return begin == end;
 }
 
 template <std::forward_iterator Iterator>
 inline void partitioning<Iterator>::grow(size_t part_index) {
-  assert(part_index + 1 < parts_count());
-  assert(!is_part_empty(part_index + 1));
+  PRECONDITION(part_index + 1 < parts_count());
+  PRECONDITION(!is_part_empty(part_index + 1));
   boundaries_[part_index + 1]++;
 }
 
 template <std::forward_iterator Iterator>
 inline void partitioning<Iterator>::grow_by(size_t part_index, size_t n) {
-  assert(part_index + 1 < parts_count());
+  PRECONDITION(part_index + 1 < parts_count());
 
   if constexpr (std::random_access_iterator<Iterator>) {
     // For random access iterators, we can check size and advance in O(1)
     auto [begin, end] = part(part_index + 1);
-    assert(static_cast<size_t>(std::distance(begin, end)) >= n);
+    PRECONDITION(static_cast<size_t>(std::distance(begin, end)) >= n);
     boundaries_[part_index + 1] += n;
   } else {
     // For forward iterators, we need to check and advance step by step
     for (size_t i = 0; i < n; ++i) {
-      assert(!is_part_empty(part_index + 1));
+      PRECONDITION(!is_part_empty(part_index + 1));
       boundaries_[part_index + 1]++;
     }
   }
@@ -145,31 +146,31 @@ inline void partitioning<Iterator>::grow_by(size_t part_index, size_t n) {
 
 template <std::forward_iterator Iterator>
 inline void partitioning<Iterator>::add_part_end(size_t part_index) {
-  assert(part_index < parts_count());
+  PRECONDITION(part_index < parts_count());
   boundaries_.insert(boundaries_.begin() + part_index + 1, boundaries_[part_index + 1]);
 }
 
 template <std::forward_iterator Iterator>
 inline void partitioning<Iterator>::add_part_begin(size_t part_index) {
-  assert(part_index < parts_count());
+  PRECONDITION(part_index < parts_count());
   boundaries_.insert(boundaries_.begin() + part_index, boundaries_[part_index]);
 }
 
 template <std::forward_iterator Iterator>
 inline void partitioning<Iterator>::add_parts_end(size_t part_index, size_t count) {
-  assert(part_index < parts_count());
+  PRECONDITION(part_index < parts_count());
   boundaries_.insert(boundaries_.begin() + part_index + 1, count, boundaries_[part_index + 1]);
 }
 
 template <std::forward_iterator Iterator>
 inline void partitioning<Iterator>::add_parts_begin(size_t part_index, size_t count) {
-  assert(part_index < parts_count());
+  PRECONDITION(part_index < parts_count());
   boundaries_.insert(boundaries_.begin() + part_index, count, boundaries_[part_index]);
 }
 
 template <std::forward_iterator Iterator>
 inline void partitioning<Iterator>::remove_part(size_t part_index) {
-  assert(part_index < parts_count());
+  PRECONDITION(part_index < parts_count());
   boundaries_.erase(boundaries_.begin() + part_index);
 }
 
