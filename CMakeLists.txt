@@ -32,7 +32,7 @@ target_compile_options(positionless INTERFACE
     $<$<CXX_COMPILER_ID:MSVC>:/W4>
 )
 
-add_executable(unit_tests test/partitioning_tests.cpp)
+add_executable(unit_tests test/tests_main.cpp test/partitioning_tests.cpp test/algorithms_tests.cpp)
 target_link_libraries(unit_tests PRIVATE positionless doctest::doctest)
 
 enable_testing()
