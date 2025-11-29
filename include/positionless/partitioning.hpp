@@ -42,6 +42,15 @@ public:
   [[nodiscard]]
   bool is_part_empty(size_t part_index) const noexcept;
 
+  /// Returns the size of the part at index `part_index`.
+  ///
+  /// Defined only for random access collections.
+  ///
+  /// - Precondition: `part_index < parts_count()`
+  [[nodiscard]]
+  size_t part_size(size_t part_index) const
+    requires std::random_access_iterator<Iterator>;
+
   /// Increases the size of the part at index `part_index` by moving its end
   /// boundary forward by one element, and decreasing the size of the next part.
   ///
@@ -117,6 +126,14 @@ inline bool partitioning<Iterator>::is_part_empty(size_t part_index) const noexc
   PRECONDITION(part_index < parts_count());
   auto [begin, end] = part(part_index);
   return begin == end;
+}
+
+template <std::forward_iterator Iterator>
+inline size_t partitioning<Iterator>::part_size(size_t part_index) const
+  requires std::random_access_iterator<Iterator>
+{
+  PRECONDITION(part_index < parts_count());
+  return static_cast<size_t>(boundaries_[part_index + 1] - boundaries_[part_index]);
 }
 
 template <std::forward_iterator Iterator>

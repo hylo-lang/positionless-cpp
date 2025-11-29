@@ -81,7 +81,7 @@ TEST_PROPERTY("`swap_first` can be used multiple times without error", [](vector
   // Verify parts still cover the entire data
   size_t total_size = 0;
   for (size_t idx = 0; idx < vp.partitioning_.parts_count(); ++idx) {
-    total_size += vp.part_size(idx);
+    total_size += vp.partitioning_.part_size(idx);
   }
   RC_ASSERT(total_size == vp.data_.size());
 });

@@ -5,11 +5,11 @@
 
 #include <algorithm>
 #include <numeric>
-#include <vector>
+#include <forward_list>
 
-// A `std::vector` with a partitioning over its elements.
-template <typename T> struct vector_partitioning {
-  using container_t = std::vector<T>;
+// A `std::forward_list` with a partitioning over its elements.
+template <typename T> struct forward_list_partitioning {
+  using container_t = std::forward_list<T>;
   using iterator_t = typename container_t::iterator;
 
   /// The underlying data.
@@ -18,7 +18,7 @@ template <typename T> struct vector_partitioning {
   positionless::partitioning<iterator_t> partitioning_;
 
   /// An instance with `k` parts over the elements of `d`.
-  explicit vector_partitioning(container_t d, size_t k = 1)
+  explicit forward_list_partitioning(container_t d, size_t k = 1)
       : data_(std::move(d)), partitioning_(data_.begin(), data_.end()) {
     if (k > 1) {
       partitioning_.add_parts_begin(0, k - 1);
@@ -28,9 +28,9 @@ template <typename T> struct vector_partitioning {
 
 namespace rc {
 
-/// RapidCheck generator for vector_partitioning<T>
-template <typename T> struct Arbitrary<vector_partitioning<T>> {
-  static Gen<vector_partitioning<T>> arbitrary() {
+/// RapidCheck generator for forward_list_partitioning<T>
+template <typename T> struct Arbitrary<forward_list_partitioning<T>> {
+  static Gen<forward_list_partitioning<T>> arbitrary() {
     return gen::exec([]() {
       const auto n = *gen::inRange<size_t>(0, 64);
       auto data = *gen::container<std::vector<T>>(n, gen::arbitrary<T>());
@@ -39,7 +39,7 @@ template <typename T> struct Arbitrary<vector_partitioning<T>> {
       const auto k = *gen::inRange<size_t>(1, maxK + 1);
 
       // Initially have only one part covering all data.
-      vector_partitioning<T> r(std::move(data), 1);
+      forward_list_partitioning<T> r(typename forward_list_partitioning<T>::container_t(data.begin(), data.end()), 1);
 
       if (k == 1) {
         return r;
