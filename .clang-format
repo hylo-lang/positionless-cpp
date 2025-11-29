@@ -6,3 +6,8 @@ Language: Cpp
 DerivePointerAlignment: false
 PointerAlignment: Left
 ColumnLimit: 100
+AllowAllArgumentsOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: true
+BinPackArguments: false
+BinPackParameters: false
+AlignAfterOpenBracket: BlockIndent
