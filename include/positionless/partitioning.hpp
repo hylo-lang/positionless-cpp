@@ -170,7 +170,7 @@ inline void partitioning<Iterator>::add_parts_begin(size_t part_index, size_t co
 template <std::forward_iterator Iterator>
 inline void partitioning<Iterator>::remove_part(size_t part_index) {
   assert(part_index < parts_count());
-  boundaries_.erase(boundaries_.begin() + part_index + 1);
+  boundaries_.erase(boundaries_.begin() + part_index);
 }
 
 } // namespace positionless

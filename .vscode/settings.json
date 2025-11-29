@@ -5,5 +5,8 @@
         "--clang-tidy",
         "--completion-style=detailed",
         "--header-insertion=iwyu"
-    ]
+    ],
+    "files.associations": {
+        "algorithm": "cpp"
+    }
 }

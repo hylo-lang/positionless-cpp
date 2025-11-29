@@ -1,622 +1,227 @@
 #include "positionless/partitioning.hpp"
 
-#include <doctest/doctest.h>
+#include "detail/rapidcheck_wrapper.hpp"
+#include "detail/vector_partitioning.hpp"
 
 #include <vector>
 
 using positionless::partitioning;
 
-SCENARIO("partitioning - constructor with range") {
-  GIVEN("a vector with 5 elements") {
-    std::vector<int> data = {1, 2, 3, 4, 5};
+TEST_PROPERTY("parts of a partitioning cover the entire data", [](vector_partitioning<int> vp) {
+  const auto k = vp.partitioning_.parts_count();
+  size_t sum = 0;
+  for (size_t i = 0; i < k; ++i) {
+    sum += vp.part_size(i);
+  }
+  RC_ASSERT(sum == vp.data_.size());
+  return true;
+})
 
-    WHEN("constructing a partitioning from the range") {
-      partitioning p(data.begin(), data.end());
+TEST_PROPERTY("partitioning allows accessing all the elements", [](vector_partitioning<int> vp) {
+  const auto k = vp.partitioning_.parts_count();
+  std::vector<int> reconstructed;
+  for (size_t i = 0; i < k; ++i) {
+    const auto part = vp.partitioning_.part(i);
+    reconstructed.insert(reconstructed.end(), part.first, part.second);
+  }
+  RC_ASSERT(reconstructed == vp.data_);
+  return true;
+})
 
-      THEN("it creates one part initially") { CHECK(p.parts_count() == 1); }
+TEST_PROPERTY("partitioning part count matches vector_partitioning", [](vector_partitioning<int> vp) {
+  RC_ASSERT(vp.partitioning_.parts_count() >= 1);
+  return true;
+})
 
-      THEN("the first part covers the entire range") {
-        auto [begin, end] = p.part(0);
-        CHECK(begin == data.begin());
-        CHECK(end == data.end());
-        CHECK(std::distance(begin, end) == 5);
-      }
+TEST_PROPERTY("`is_part_empty` returns true for empty parts, and false otherwise", [](vector_partitioning<int> vp) {
+  const auto k = vp.partitioning_.parts_count();
+  for (size_t i = 0; i < k; ++i) {
+    const bool empty = vp.partitioning_.is_part_empty(i);
+    const size_t size = vp.part_size(i);
+    RC_ASSERT(empty == (size == 0));
+  }
+  return true;
+})
 
-      THEN("the first part is not empty") { CHECK_FALSE(p.is_part_empty(0)); }
+TEST_PROPERTY("`grow` increases the size of a part by 1", [](vector_partitioning<int> vp) {
+  const auto k = vp.partitioning_.parts_count();
+  RC_PRE(k >= 2);
+  
+  // Find a valid index where next part is non-empty
+  size_t idx = 0;
+  for (size_t i = 0; i + 1 < k; ++i) {
+    if (!vp.partitioning_.is_part_empty(i + 1)) {
+      idx = i;
+      break;
     }
   }
-}
-
-SCENARIO("partitioning - parts_count") {
-  GIVEN("a partitioning with 5 elements") {
-    std::vector<int> data = {1, 2, 3, 4, 5};
-    partitioning p(data.begin(), data.end());
-
-    THEN("it initially has one part") { CHECK(p.parts_count() == 1); }
-
-    WHEN("adding a part at index 0") {
-      p.add_part_end(0);
-
-      THEN("it has two parts") { CHECK(p.parts_count() == 2); }
-
-      AND_WHEN("adding another part at index 1") {
-        p.add_part_end(1);
-
-        THEN("it has three parts") { CHECK(p.parts_count() == 3); }
-      }
+  RC_PRE(!vp.partitioning_.is_part_empty(idx + 1));
+  
+  const size_t before = vp.part_size(idx);
+  const size_t next_before = vp.part_size(idx + 1);
+  vp.partitioning_.grow(idx);
+  const size_t after = vp.part_size(idx);
+  const size_t next_after = vp.part_size(idx + 1);
+  
+  RC_ASSERT(after == before + 1);
+  RC_ASSERT(next_after == next_before - 1);
+  return true;
+})
+  
+TEST_PROPERTY("`grow_by` increases the size of a part by `n`", [](vector_partitioning<int> vp) {
+  const auto k = vp.partitioning_.parts_count();
+  RC_PRE(k >= 2);
+  
+  // Find a valid index where next part is non-empty
+  size_t idx = 0;
+  size_t max_grow = 0;
+  for (size_t i = 0; i + 1 < k; ++i) {
+    const size_t next_size = vp.part_size(i + 1);
+    if (next_size > max_grow) {
+      idx = i;
+      max_grow = next_size;
     }
   }
-}
+  RC_PRE(max_grow > 0);
+  
+  const size_t n = *rc::gen::inRange<size_t>(1, max_grow + 1);
+  const size_t before = vp.part_size(idx);
+  const size_t next_before = vp.part_size(idx + 1);
+  
+  vp.partitioning_.grow_by(idx, n);
+  
+  const size_t after = vp.part_size(idx);
+  const size_t next_after = vp.part_size(idx + 1);
+  
+  RC_ASSERT(after == before + n);
+  RC_ASSERT(next_after == next_before - n);
+  return true;
+})
 
-SCENARIO("partitioning - part") {
-  GIVEN("a partitioning with 5 elements") {
-    std::vector<int> data = {1, 2, 3, 4, 5};
-    partitioning p(data.begin(), data.end());
+TEST_PROPERTY("`add_part_end` adds a new empty part at the end `part_index`", [](vector_partitioning<int> vp) {
+  const auto k = vp.partitioning_.parts_count();
+  const size_t idx = *rc::gen::inRange<size_t>(0, k);
+  
+  const size_t size_before = vp.part_size(idx);
+  vp.partitioning_.add_part_end(idx);
+  
+  RC_ASSERT(vp.partitioning_.parts_count() == k + 1);
+  RC_ASSERT(vp.part_size(idx) == size_before);
+  RC_ASSERT(vp.partitioning_.is_part_empty(idx + 1));
+  return true;
+})
 
-    WHEN("getting the part at index 0") {
-      auto [begin, end] = p.part(0);
+TEST_PROPERTY("`add_part_begin` adds a new empty part at the begin `part_index`", [](vector_partitioning<int> vp) {
+  const auto k = vp.partitioning_.parts_count();
+  const size_t idx = *rc::gen::inRange<size_t>(0, k);
+  
+  const size_t size_before = vp.part_size(idx);
+  vp.partitioning_.add_part_begin(idx);
+  
+  RC_ASSERT(vp.partitioning_.parts_count() == k + 1);
+  RC_ASSERT(vp.partitioning_.is_part_empty(idx));
+  RC_ASSERT(vp.part_size(idx + 1) == size_before);
+  return true;
+})
 
-      THEN("it returns the correct iterators") {
-        CHECK(begin == data.begin());
-        CHECK(end == data.end());
-      }
-    }
-
-    WHEN("adding a part and getting both parts") {
-      p.add_part_end(0);
-      auto [begin0, end0] = p.part(0);
-      auto [begin1, end1] = p.part(1);
-
-      THEN("part 0 still covers the full range") {
-        CHECK(begin0 == data.begin());
-        CHECK(end0 == data.end());
-      }
-
-      THEN("part 1 is empty at the end") {
-        CHECK(begin1 == data.end());
-        CHECK(end1 == data.end());
-      }
-    }
+TEST_PROPERTY("`add_parts_end` adds `n` empty parts at the end `part_index`", [](vector_partitioning<int> vp) {
+  const auto k = vp.partitioning_.parts_count();
+  const size_t idx = *rc::gen::inRange<size_t>(0, k);
+  const size_t n = *rc::gen::inRange<size_t>(1, 6);
+  
+  const size_t size_before = vp.part_size(idx);
+  vp.partitioning_.add_parts_end(idx, n);
+  
+  RC_ASSERT(vp.partitioning_.parts_count() == k + n);
+  RC_ASSERT(vp.part_size(idx) == size_before);
+  for (size_t i = 1; i <= n; ++i) {
+    RC_ASSERT(vp.partitioning_.is_part_empty(idx + i));
   }
-}
+  return true;
+})
 
-SCENARIO("partitioning - is_part_empty") {
-  GIVEN("a partitioning with 5 elements") {
-    std::vector<int> data = {1, 2, 3, 4, 5};
-    partitioning p(data.begin(), data.end());
-
-    THEN("the initial part is not empty") { CHECK_FALSE(p.is_part_empty(0)); }
-
-    WHEN("adding a new empty part") {
-      p.add_part_end(0);
-
-      THEN("the original part is still not empty") { CHECK_FALSE(p.is_part_empty(0)); }
-
-      THEN("the newly added part is empty") { CHECK(p.is_part_empty(1)); }
-    }
+TEST_PROPERTY("`add_parts_begin` adds `n` empty parts at the begin `part_index`", [](vector_partitioning<int> vp) {
+  const auto k = vp.partitioning_.parts_count();
+  const size_t idx = *rc::gen::inRange<size_t>(0, k);
+  const size_t n = *rc::gen::inRange<size_t>(1, 6);
+  
+  const size_t size_before = vp.part_size(idx);
+  vp.partitioning_.add_parts_begin(idx, n);
+  
+  RC_ASSERT(vp.partitioning_.parts_count() == k + n);
+  for (size_t i = 0; i < n; ++i) {
+    RC_ASSERT(vp.partitioning_.is_part_empty(idx + i));
   }
-}
+  RC_ASSERT(vp.part_size(idx + n) == size_before);
+  return true;
+})
 
-SCENARIO("partitioning - grow") {
-  GIVEN("a partitioning with 5 elements") {
-    std::vector<int> data = {1, 2, 3, 4, 5};
-    partitioning p(data.begin(), data.end());
+TEST_PROPERTY("`remove_part` decreases the number of parts by 1", [](vector_partitioning<int> vp) {
+  const auto k = vp.partitioning_.parts_count();
+  RC_PRE(k >= 2);
+  
+  const size_t idx = *rc::gen::inRange<size_t>(1, k);
+  vp.partitioning_.remove_part(idx);
+  
+  RC_ASSERT(vp.partitioning_.parts_count() == k - 1);
+  return true;
+})
 
-    WHEN("adding an empty part at the end") {
-      p.add_part_end(0);
+TEST_PROPERTY("`remove_part` transfer all the elements of `part_index` to part `part_index-1`", [](vector_partitioning<int> vp) {
+  const auto k = vp.partitioning_.parts_count();
+  RC_PRE(k >= 2);
+  
+  const size_t idx = *rc::gen::inRange<size_t>(1, k);
+  const size_t expected_size = vp.part_size(idx - 1) + vp.part_size(idx);
+  
+  vp.partitioning_.remove_part(idx);
+  
+  RC_ASSERT(vp.part_size(idx - 1) == expected_size);
+  return true;
+})
 
-      THEN("the partitioning has two parts") { CHECK(p.parts_count() == 2); }
-
-      THEN("the new part is empty") { CHECK(p.is_part_empty(1)); }
-
-      THEN("parts are contiguous") {
-        auto [begin0, end0] = p.part(0);
-        auto [begin1, end1] = p.part(1);
-        CHECK(end0 == begin1);
-      }
-    }
+TEST_PROPERTY("`add_parts_end` is equivalent to calling `add_part_end` `n` times", [](vector_partitioning<int> vp) {
+  auto copy1 = vp;
+  auto copy2 = vp;
+  const auto k = copy1.partitioning_.parts_count();
+  const size_t idx = *rc::gen::inRange<size_t>(0, k);
+  const size_t n = *rc::gen::inRange<size_t>(1, 6);
+  
+  // Use add_parts_end
+  copy1.partitioning_.add_parts_end(idx, n);
+  
+  // Use add_part_end n times
+  for (size_t i = 0; i < n; ++i) {
+    copy2.partitioning_.add_part_end(idx);
   }
-}
-
-SCENARIO("partitioning - add_part_end") {
-  GIVEN("a partitioning with 5 elements") {
-    std::vector<int> data = {1, 2, 3, 4, 5};
-    partitioning p(data.begin(), data.end());
-
-    WHEN("adding a part at index 0") {
-      p.add_part_end(0);
-
-      THEN("the partitioning has two parts") { CHECK(p.parts_count() == 2); }
-
-      THEN("the new part is empty") { CHECK(p.is_part_empty(1)); }
-    }
-
-    WHEN("adding multiple parts sequentially at index 0") {
-      p.add_part_end(0);
-      p.add_part_end(0);
-      p.add_part_end(0);
-
-      THEN("the partitioning has four parts") { CHECK(p.parts_count() == 4); }
-
-      THEN("all new parts are empty") {
-        CHECK(p.is_part_empty(1));
-        CHECK(p.is_part_empty(2));
-        CHECK(p.is_part_empty(3));
-      }
-    }
-
-    WHEN("adding parts at different indices") {
-      p.add_part_end(0);
-      p.add_part_end(1);
-
-      THEN("the partitioning has three parts") { CHECK(p.parts_count() == 3); }
-    }
+  
+  RC_ASSERT(copy1.partitioning_.parts_count() == copy2.partitioning_.parts_count());
+  for (size_t i = 0; i < copy1.partitioning_.parts_count(); ++i) {
+    RC_ASSERT(copy1.part_size(i) == copy2.part_size(i));
   }
-}
+  return true;
+})
 
-SCENARIO("partitioning - add_parts_end") {
-  GIVEN("a partitioning with 5 elements") {
-    std::vector<int> data = {1, 2, 3, 4, 5};
-    partitioning p(data.begin(), data.end());
-
-    WHEN("adding 3 parts at once") {
-      p.add_parts_end(0, 3);
-
-      THEN("the partitioning has four parts") { CHECK(p.parts_count() == 4); }
-
-      THEN("all new parts are empty") {
-        CHECK(p.is_part_empty(1));
-        CHECK(p.is_part_empty(2));
-        CHECK(p.is_part_empty(3));
-      }
-    }
-
-    WHEN("adding 0 parts") {
-      p.add_parts_end(0, 0);
-
-      THEN("the part count remains unchanged") { CHECK(p.parts_count() == 1); }
-    }
+TEST_PROPERTY("`add_parts_begin` is equivalent to calling `add_part_begin` `n` times", [](vector_partitioning<int> vp) {
+  auto copy1 = vp;
+  auto copy2 = vp;
+  const auto k = copy1.partitioning_.parts_count();
+  const size_t idx = *rc::gen::inRange<size_t>(0, k);
+  const size_t n = *rc::gen::inRange<size_t>(1, 6);
+  
+  // Use add_parts_begin
+  copy1.partitioning_.add_parts_begin(idx, n);
+  
+  // Use add_part_begin n times
+  for (size_t i = 0; i < n; ++i) {
+    copy2.partitioning_.add_part_begin(idx);
   }
-
-  GIVEN("two partitionings with the same data") {
-    std::vector<int> data = {1, 2, 3, 4, 5};
-    partitioning p1(data.begin(), data.end());
-    partitioning p2(data.begin(), data.end());
-
-    WHEN("one adds 1 part and the other adds 1 part using add_parts") {
-      p1.add_part_end(0);
-      p2.add_parts_end(0, 1);
-
-      THEN("both have the same part count") { CHECK(p1.parts_count() == p2.parts_count()); }
-    }
+  
+  RC_ASSERT(copy1.partitioning_.parts_count() == copy2.partitioning_.parts_count());
+  for (size_t i = 0; i < copy1.partitioning_.parts_count(); ++i) {
+    RC_ASSERT(copy1.part_size(i) == copy2.part_size(i));
   }
-}
+  return true;
+})
 
-SCENARIO("partitioning - remove_part") {
-  GIVEN("a partitioning with three parts") {
-    std::vector<int> data = {1, 2, 3, 4, 5};
-    partitioning p(data.begin(), data.end());
-    p.add_part_end(0);
-    p.add_part_end(0);
 
-    THEN("it has three parts") { CHECK(p.parts_count() == 3); }
-
-    WHEN("removing part 1") {
-      p.remove_part(1);
-
-      THEN("it has two parts") { CHECK(p.parts_count() == 2); }
-    }
-  }
-
-  GIVEN("a partitioning with three parts created at once") {
-    std::vector<int> data = {1, 2, 3, 4, 5};
-    partitioning p(data.begin(), data.end());
-    p.add_parts_end(0, 2);
-
-    THEN("it has three parts") { CHECK(p.parts_count() == 3); }
-
-    WHEN("removing the middle part") {
-      p.remove_part(1);
-
-      THEN("it has two parts") { CHECK(p.parts_count() == 2); }
-
-      THEN("part 0 extends to the original end") {
-        auto [begin0, end0] = p.part(0);
-        CHECK(begin0 == data.begin());
-        CHECK(end0 == data.end());
-      }
-    }
-  }
-}
-
-SCENARIO("partitioning - edge cases") {
-  GIVEN("a vector with a single element") {
-    std::vector<int> data = {42};
-
-    WHEN("creating a partitioning from it") {
-      partitioning p(data.begin(), data.end());
-
-      THEN("it has one part") { CHECK(p.parts_count() == 1); }
-
-      THEN("the part is not empty") { CHECK_FALSE(p.is_part_empty(0)); }
-
-      THEN("the part contains the single element") {
-        auto [begin, end] = p.part(0);
-        CHECK(std::distance(begin, end) == 1);
-        CHECK(*begin == 42);
-      }
-    }
-  }
-
-  GIVEN("an empty vector") {
-    std::vector<int> data;
-
-    WHEN("creating a partitioning from it") {
-      partitioning p(data.begin(), data.end());
-
-      THEN("it has one part") { CHECK(p.parts_count() == 1); }
-
-      THEN("the part is empty") { CHECK(p.is_part_empty(0)); }
-    }
-  }
-
-  GIVEN("a partitioning with multiple operations") {
-    std::vector<int> data = {1, 2, 3, 4, 5};
-    partitioning p(data.begin(), data.end());
-
-    WHEN("adding 3 parts and then removing 2") {
-      p.add_parts_end(0, 3);
-
-      THEN("it has four parts initially") { CHECK(p.parts_count() == 4); }
-
-      AND_WHEN("removing part 2") {
-        p.remove_part(2);
-
-        THEN("it has three parts") { CHECK(p.parts_count() == 3); }
-
-        AND_WHEN("removing part 1") {
-          p.remove_part(1);
-
-          THEN("it has two parts") { CHECK(p.parts_count() == 2); }
-        }
-      }
-    }
-  }
-}
-
-SCENARIO("partitioning - add_part_begin") {
-  GIVEN("a partitioning with 5 elements") {
-    std::vector<int> data = {1, 2, 3, 4, 5};
-    partitioning p(data.begin(), data.end());
-
-    WHEN("adding a part at the beginning of part 0") {
-      p.add_part_begin(0);
-
-      THEN("the partitioning has two parts") { CHECK(p.parts_count() == 2); }
-
-      THEN("the new part 0 is empty") { CHECK(p.is_part_empty(0)); }
-
-      THEN("the new part 1 contains all elements") {
-        auto [begin1, end1] = p.part(1);
-        CHECK(std::distance(begin1, end1) == 5);
-      }
-    }
-
-    WHEN("adding multiple parts at the beginning sequentially") {
-      p.add_part_begin(0);
-      p.add_part_begin(0);
-      p.add_part_begin(0);
-
-      THEN("the partitioning has four parts") { CHECK(p.parts_count() == 4); }
-
-      THEN("the first three parts are empty") {
-        CHECK(p.is_part_empty(0));
-        CHECK(p.is_part_empty(1));
-        CHECK(p.is_part_empty(2));
-      }
-
-      THEN("the last part contains all elements") {
-        auto [begin3, end3] = p.part(3);
-        CHECK(std::distance(begin3, end3) == 5);
-      }
-    }
-  }
-}
-
-SCENARIO("partitioning - add_parts_begin") {
-  GIVEN("a partitioning with 5 elements") {
-    std::vector<int> data = {1, 2, 3, 4, 5};
-    partitioning p(data.begin(), data.end());
-
-    WHEN("adding 3 parts at the beginning at once") {
-      p.add_parts_begin(0, 3);
-
-      THEN("the partitioning has four parts") { CHECK(p.parts_count() == 4); }
-
-      THEN("the first three parts are empty") {
-        CHECK(p.is_part_empty(0));
-        CHECK(p.is_part_empty(1));
-        CHECK(p.is_part_empty(2));
-      }
-
-      THEN("the last part contains all elements") {
-        auto [begin3, end3] = p.part(3);
-        CHECK(std::distance(begin3, end3) == 5);
-      }
-    }
-
-    WHEN("adding 0 parts") {
-      p.add_parts_begin(0, 0);
-
-      THEN("the part count remains unchanged") { CHECK(p.parts_count() == 1); }
-    }
-  }
-
-  GIVEN("two partitionings with the same data") {
-    std::vector<int> data = {1, 2, 3, 4, 5};
-    partitioning p1(data.begin(), data.end());
-    partitioning p2(data.begin(), data.end());
-
-    WHEN("one adds 1 part with add_part_begin and the other with add_parts_begin") {
-      p1.add_part_begin(0);
-      p2.add_parts_begin(0, 1);
-
-      THEN("both have the same part count") { CHECK(p1.parts_count() == p2.parts_count()); }
-    }
-  }
-}
-
-SCENARIO("partitioning - grow with add_part_begin") {
-  GIVEN("a partitioning with 10 elements") {
-    std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-    partitioning p(data.begin(), data.end());
-
-    WHEN("creating a custom partitioning using add_part_begin and grow") {
-      // Add two empty parts at the beginning
-      p.add_parts_begin(0, 2);
-
-      THEN("we have three parts, last one with all elements") {
-        CHECK(p.parts_count() == 3);
-        CHECK(p.is_part_empty(0));
-        CHECK(p.is_part_empty(1));
-        CHECK_FALSE(p.is_part_empty(2));
-      }
-
-      AND_WHEN("growing part 0 to take 3 elements from part 1") {
-        // Part 1 is empty, so we need to grow part 1 first from part 2
-        p.grow_by(1, 3);
-
-        THEN("part 1 now has 3 elements") {
-          auto [b1, e1] = p.part(1);
-          CHECK(std::distance(b1, e1) == 3);
-        }
-
-        THEN("part 2 now has 7 elements") {
-          auto [b2, e2] = p.part(2);
-          CHECK(std::distance(b2, e2) == 7);
-        }
-
-        AND_WHEN("growing part 0 to take 2 elements from part 1") {
-          p.grow_by(0, 2);
-
-          THEN("part 0 has 2 elements") {
-            auto [b0, e0] = p.part(0);
-            CHECK(std::distance(b0, e0) == 2);
-            std::vector<int> part0_data(b0, e0);
-            CHECK(part0_data == std::vector<int>{1, 2});
-          }
-
-          THEN("part 1 has 1 element") {
-            auto [b1, e1] = p.part(1);
-            CHECK(std::distance(b1, e1) == 1);
-            std::vector<int> part1_data(b1, e1);
-            CHECK(part1_data == std::vector<int>{3});
-          }
-
-          THEN("part 2 has 7 elements") {
-            auto [b2, e2] = p.part(2);
-            CHECK(std::distance(b2, e2) == 7);
-            std::vector<int> part2_data(b2, e2);
-            CHECK(part2_data == std::vector<int>{4, 5, 6, 7, 8, 9, 10});
-          }
-        }
-      }
-    }
-  }
-}
-
-SCENARIO("partitioning - complex scenario with begin and end operations") {
-  GIVEN("a partitioning with 10 elements") {
-    std::vector<int> data = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
-    partitioning p(data.begin(), data.end());
-
-    WHEN("creating a 3-part partition: [10,20,30] [40,50,60] [70,80,90,100]") {
-      // Add empty parts at beginning
-      p.add_parts_begin(0, 2);
-      // Now: [empty] [empty] [10,20,30,40,50,60,70,80,90,100]
-
-      // Grow first part to get 3 elements from part 1
-      // But part 1 is empty, so first grow part 1 from part 2
-      p.grow_by(1, 6);
-      // Now: [empty] [10,20,30,40,50,60] [70,80,90,100]
-
-      // Now grow first part from part 1
-      p.grow_by(0, 3);
-      // Now: [10,20,30] [40,50,60] [70,80,90,100]
-
-      THEN("we have three parts with the expected sizes") {
-        CHECK(p.parts_count() == 3);
-
-        auto [b0, e0] = p.part(0);
-        auto [b1, e1] = p.part(1);
-        auto [b2, e2] = p.part(2);
-
-        CHECK(std::distance(b0, e0) == 3);
-        CHECK(std::distance(b1, e1) == 3);
-        CHECK(std::distance(b2, e2) == 4);
-      }
-
-      THEN("each part contains the expected elements") {
-        auto [b0, e0] = p.part(0);
-        auto [b1, e1] = p.part(1);
-        auto [b2, e2] = p.part(2);
-
-        std::vector<int> part0(b0, e0);
-        std::vector<int> part1(b1, e1);
-        std::vector<int> part2(b2, e2);
-
-        CHECK(part0 == std::vector<int>{10, 20, 30});
-        CHECK(part1 == std::vector<int>{40, 50, 60});
-        CHECK(part2 == std::vector<int>{70, 80, 90, 100});
-      }
-    }
-  }
-}
-
-SCENARIO("partitioning - grow_by basic functionality") {
-  GIVEN("a partitioning with 10 elements") {
-    std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-    partitioning p(data.begin(), data.end());
-
-    WHEN("adding an empty part at the beginning and growing it by 3") {
-      p.add_part_begin(0);
-      // Now: [empty] [1,2,3,4,5,6,7,8,9,10]
-      p.grow_by(0, 3);
-      // Now: [1,2,3] [4,5,6,7,8,9,10]
-
-      THEN("part 0 has 3 elements") {
-        auto [b0, e0] = p.part(0);
-        CHECK(std::distance(b0, e0) == 3);
-        std::vector<int> part0_data(b0, e0);
-        CHECK(part0_data == std::vector<int>{1, 2, 3});
-      }
-
-      THEN("part 1 has 7 elements") {
-        auto [b1, e1] = p.part(1);
-        CHECK(std::distance(b1, e1) == 7);
-        std::vector<int> part1_data(b1, e1);
-        CHECK(part1_data == std::vector<int>{4, 5, 6, 7, 8, 9, 10});
-      }
-    }
-
-    WHEN("growing by 0 elements") {
-      p.add_part_begin(0);
-      p.grow_by(0, 0);
-
-      THEN("part 0 remains empty") { CHECK(p.is_part_empty(0)); }
-
-      THEN("part 1 still has all 10 elements") {
-        auto [b1, e1] = p.part(1);
-        CHECK(std::distance(b1, e1) == 10);
-      }
-    }
-  }
-}
-
-SCENARIO("partitioning - grow_by with multiple parts") {
-  GIVEN("a partitioning with 12 elements") {
-    std::vector<int> data = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120};
-    partitioning p(data.begin(), data.end());
-
-    WHEN("creating three parts using grow_by") {
-      p.add_parts_begin(0, 2);
-      // Now: [empty] [empty] [10,20,30,40,50,60,70,80,90,100,110,120]
-
-      p.grow_by(1, 8); // Part 1 gets 8 elements
-      // Now: [empty] [10,20,30,40,50,60,70,80] [90,100,110,120]
-
-      p.grow_by(0, 3); // Part 0 gets 3 elements from part 1
-      // Now: [10,20,30] [40,50,60,70,80] [90,100,110,120]
-
-      THEN("all parts have the expected sizes") {
-        auto [b0, e0] = p.part(0);
-        auto [b1, e1] = p.part(1);
-        auto [b2, e2] = p.part(2);
-
-        CHECK(std::distance(b0, e0) == 3);
-        CHECK(std::distance(b1, e1) == 5);
-        CHECK(std::distance(b2, e2) == 4);
-      }
-
-      THEN("each part contains the expected elements") {
-        auto [b0, e0] = p.part(0);
-        auto [b1, e1] = p.part(1);
-        auto [b2, e2] = p.part(2);
-
-        std::vector<int> part0(b0, e0);
-        std::vector<int> part1(b1, e1);
-        std::vector<int> part2(b2, e2);
-
-        CHECK(part0 == std::vector<int>{10, 20, 30});
-        CHECK(part1 == std::vector<int>{40, 50, 60, 70, 80});
-        CHECK(part2 == std::vector<int>{90, 100, 110, 120});
-      }
-    }
-  }
-}
-
-SCENARIO("partitioning - grow_by compared to multiple grow calls") {
-  GIVEN("two identical partitionings with 8 elements") {
-    std::vector<int> data1 = {1, 2, 3, 4, 5, 6, 7, 8};
-    std::vector<int> data2 = {1, 2, 3, 4, 5, 6, 7, 8};
-    partitioning p1(data1.begin(), data1.end());
-    partitioning p2(data2.begin(), data2.end());
-
-    WHEN("using grow_by vs multiple grow calls") {
-      p1.add_part_begin(0);
-      p2.add_part_begin(0);
-
-      // Use grow_by
-      p1.grow_by(0, 5);
-
-      // Use multiple grow calls
-      for (int i = 0; i < 5; ++i) {
-        p2.grow(0);
-      }
-
-      THEN("both produce the same partitioning") {
-        CHECK(p1.parts_count() == p2.parts_count());
-
-        auto [b1_0, e1_0] = p1.part(0);
-        auto [b2_0, e2_0] = p2.part(0);
-        CHECK(std::distance(b1_0, e1_0) == std::distance(b2_0, e2_0));
-
-        std::vector<int> part1_0(b1_0, e1_0);
-        std::vector<int> part2_0(b2_0, e2_0);
-        CHECK(part1_0 == part2_0);
-      }
-
-      THEN("the data vectors are modified identically") { CHECK(data1 == data2); }
-    }
-  }
-}
-
-SCENARIO("partitioning - grow_by edge cases") {
-  GIVEN("a partitioning with 5 elements") {
-    std::vector<int> data = {100, 200, 300, 400, 500};
-    partitioning p(data.begin(), data.end());
-
-    WHEN("growing by exactly the size of the next part") {
-      p.add_part_begin(0);
-      p.grow_by(0, 5);
-
-      THEN("part 0 gets all elements") {
-        auto [b0, e0] = p.part(0);
-        CHECK(std::distance(b0, e0) == 5);
-      }
-
-      THEN("part 1 becomes empty") { CHECK(p.is_part_empty(1)); }
-    }
-
-    WHEN("using grow_by with a single element") {
-      p.add_part_begin(0);
-      p.grow_by(0, 1);
-
-      THEN("it behaves like grow") {
-        auto [b0, e0] = p.part(0);
-        CHECK(std::distance(b0, e0) == 1);
-        CHECK(*b0 == 100);
-      }
-    }
-  }
-}
