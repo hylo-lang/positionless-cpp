@@ -34,10 +34,6 @@ target_compile_options(positionless INTERFACE
 
 add_executable(unit_tests test/partitioning_tests.cpp)
 target_link_libraries(unit_tests PRIVATE positionless doctest::doctest)
-target_compile_options(unit_tests PRIVATE
-    $<$<CXX_COMPILER_ID:Clang,AppleClang,GNU>:-Wall -Wextra -Wpedantic>
-    $<$<CXX_COMPILER_ID:MSVC>:/W4>
-)
 
 enable_testing()
 add_test(NAME unit_tests COMMAND unit_tests)
