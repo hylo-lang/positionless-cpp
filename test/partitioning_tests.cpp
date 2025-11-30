@@ -1,9 +1,10 @@
 #include "positionless/partitioning.hpp"
 
-#include "detail/forward_list_partitioning.hpp"
 #include "detail/rapidcheck_wrapper.hpp"
 #include "detail/vector_partitioning.hpp"
 
+#include <forward_list>
+#include <list>
 #include <vector>
 
 using positionless::partitioning;
@@ -76,8 +77,8 @@ TEST_PROPERTY("`grow` increases the size of a part by 1", [](vector_partitioning
 })
 
 TEST_PROPERTY("`grow_by` increases the size of a part by `n`", [](vector_partitioning<int> vp) {
-  const auto k = vp.partitioning_.parts_count();
-  RC_PRE(k >= 2);
+  const size_t k = vp.partitioning_.parts_count();
+  RC_PRE(k >= size_t{2});
 
   // Find a valid index where next part is non-empty
   size_t idx = 0;
@@ -104,6 +105,130 @@ TEST_PROPERTY("`grow_by` increases the size of a part by `n`", [](vector_partiti
   RC_ASSERT(next_after == next_before - n);
   return true;
 })
+
+TEST_PROPERTY("`shrink` decreases the size of a part by 1", [](vector_partitioning<int> vp) {
+  const auto k = vp.partitioning_.parts_count();
+  RC_PRE(k >= size_t(2));
+
+  // Find a valid index where current part is non-empty
+  size_t idx = 0;
+  for (size_t i = 0; i + 1 < k; ++i) {
+    if (!vp.partitioning_.is_part_empty(i)) {
+      idx = i;
+      break;
+    }
+  }
+  RC_PRE(!vp.partitioning_.is_part_empty(idx));
+
+  const size_t before = vp.partitioning_.part_size(idx);
+  const size_t next_before = vp.partitioning_.part_size(idx + 1);
+  vp.partitioning_.shrink(idx);
+  const size_t after = vp.partitioning_.part_size(idx);
+  const size_t next_after = vp.partitioning_.part_size(idx + 1);
+
+  RC_ASSERT(after == before - 1);
+  RC_ASSERT(next_after == next_before + 1);
+  return true;
+})
+
+TEST_PROPERTY("`shrink_by` decreases the size of a part by `n`", [](vector_partitioning<int> vp) {
+  const auto k = vp.partitioning_.parts_count();
+  RC_PRE(k >= size_t{2});
+
+  // Find a valid index where current part is non-empty
+  size_t idx = 0;
+  size_t max_shrink = 0;
+  for (size_t i = 0; i + 1 < k; ++i) {
+    const size_t size = vp.partitioning_.part_size(i);
+    if (size > max_shrink) {
+      idx = i;
+      max_shrink = size;
+    }
+  }
+  RC_PRE(max_shrink > size_t(0));
+
+  const size_t n = *rc::gen::inRange<size_t>(1, max_shrink + 1);
+  const size_t before = vp.partitioning_.part_size(idx);
+  const size_t next_before = vp.partitioning_.part_size(idx + 1);
+
+  vp.partitioning_.shrink_by(idx, n);
+
+  const size_t after = vp.partitioning_.part_size(idx);
+  const size_t next_after = vp.partitioning_.part_size(idx + 1);
+
+  RC_ASSERT(after == before - n);
+  RC_ASSERT(next_after == next_before + n);
+  return true;
+})
+
+TEST_PROPERTY(
+    "`grow` followed by `shrink` returns to original state",
+    [](vector_partitioning<int> vp) {
+      const size_t k = vp.partitioning_.parts_count();
+      RC_PRE(k >= size_t{2});
+
+      // Find a valid index where next part is non-empty
+      size_t idx = 0;
+      for (size_t i = 0; i + 1 < k; ++i) {
+        if (!vp.partitioning_.is_part_empty(i + 1)) {
+          idx = i;
+          break;
+        }
+      }
+      RC_PRE(!vp.partitioning_.is_part_empty(idx + 1));
+
+      const size_t before = vp.partitioning_.part_size(idx);
+      const size_t next_before = vp.partitioning_.part_size(idx + 1);
+
+      vp.partitioning_.grow(idx);
+      vp.partitioning_.shrink(idx);
+
+      const size_t after = vp.partitioning_.part_size(idx);
+      const size_t next_after = vp.partitioning_.part_size(idx + 1);
+
+      RC_ASSERT(after == before);
+      RC_ASSERT(next_after == next_before);
+      return true;
+    }
+)
+
+TEST_PROPERTY(
+    "`shrink_by` is equivalent to calling `shrink` `n` times",
+    [](vector_partitioning<int> vp) {
+      auto copy1 = vp;
+      auto copy2 = vp;
+      const size_t k = copy1.partitioning_.parts_count();
+      RC_PRE(k >= size_t{2});
+
+      // Find a valid index where current part is non-empty
+      size_t idx = 0;
+      size_t max_shrink = 0;
+      for (size_t i = 0; i + 1 < k; ++i) {
+        const size_t size = copy1.partitioning_.part_size(i);
+        if (size > max_shrink) {
+          idx = i;
+          max_shrink = size;
+        }
+      }
+      RC_PRE(max_shrink > size_t(0));
+
+      const size_t n = *rc::gen::inRange<size_t>(1, max_shrink + 1);
+
+      // Use shrink_by
+      copy1.partitioning_.shrink_by(idx, n);
+
+      // Use shrink n times
+      for (size_t i = 0; i < n; ++i) {
+        copy2.partitioning_.shrink(idx);
+      }
+
+      RC_ASSERT(copy1.partitioning_.parts_count() == copy2.partitioning_.parts_count());
+      for (size_t i = 0; i < copy1.partitioning_.parts_count(); ++i) {
+        RC_ASSERT(copy1.partitioning_.part_size(i) == copy2.partitioning_.part_size(i));
+      }
+      return true;
+    }
+)
 
 TEST_PROPERTY(
     "`add_part_end` adds a new empty part at the end `part_index`",
@@ -177,7 +302,7 @@ TEST_PROPERTY(
 
 TEST_PROPERTY("`remove_part` decreases the number of parts by 1", [](vector_partitioning<int> vp) {
   const auto k = vp.partitioning_.parts_count();
-  RC_PRE(k >= 2);
+  RC_PRE(k >= size_t{2});
 
   const size_t idx = *rc::gen::inRange<size_t>(1, k);
   vp.partitioning_.remove_part(idx);
@@ -190,7 +315,7 @@ TEST_PROPERTY(
     "`remove_part` transfer all the elements of `part_index` to part `part_index-1`",
     [](vector_partitioning<int> vp) {
       const auto k = vp.partitioning_.parts_count();
-      RC_PRE(k >= 2);
+      RC_PRE(k >= size_t{2});
 
       const size_t idx = *rc::gen::inRange<size_t>(1, k);
       const size_t expected_size =
@@ -253,96 +378,122 @@ TEST_PROPERTY(
     }
 )
 
+TEST_PROPERTY("forward_list partitioning covers entire data", [](std::forward_list<int> data) {
+  partitioning<std::forward_list<int>::iterator> p(data.begin(), data.end());
+  testgen::generate_splits(p);
+
+  const auto k = p.parts_count();
+  size_t sum = 0;
+  for (size_t i = 0; i < k; ++i) {
+    sum += p.part_size(i);
+  }
+  RC_ASSERT(static_cast<std::ptrdiff_t>(sum) == std::distance(data.begin(), data.end()));
+})
+
 TEST_PROPERTY(
-    "forward_list partitioning covers entire data",
-    [](forward_list_partitioning<int> fp) {
-      const auto k = fp.partitioning_.parts_count();
-      size_t sum = 0;
-      for (size_t i = 0; i < k; ++i)
-        sum += std::distance(fp.partitioning_.part(i).first, fp.partitioning_.part(i).second);
-      RC_ASSERT(
-          static_cast<std::ptrdiff_t>(sum) == std::distance(fp.data_.begin(), fp.data_.end())
-      );
-      return true;
+    "can use all operations on a forward list partitioning",
+    [](std::forward_list<int> data) {
+      partitioning<std::forward_list<int>::iterator> p(data.begin(), data.end());
+      testgen::generate_splits(p);
+
+      const size_t k = p.parts_count();
+      RC_PRE(k >= size_t{2});
+      const size_t i = *rc::gen::inRange<size_t>(0, k - 1);
+
+      // We just want to check that all operations are correctly instantiated.
+
+      (void)p.part(i);
+      (void)p.is_part_empty(i);
+      (void)p.part_size(i); // O(N) complexity
+
+      if (!p.is_part_empty(i + 1)) {
+        p.grow(i);
+      }
+      if (!p.is_part_empty(i + 1)) {
+        p.grow_by(i, 1);
+      }
+      p.add_part_end(i);
+      p.add_part_begin(i);
+      p.add_parts_end(i, 2);
+      p.add_parts_begin(i, 2);
+      p.remove_part(i);
+    }
+)
+
+TEST_PROPERTY("bidirectional list partitioning covers entire data", [](std::list<int> data) {
+  partitioning<std::list<int>::iterator> p(data.begin(), data.end());
+  testgen::generate_splits(p);
+
+  const size_t k = p.parts_count();
+  size_t sum = 0;
+  for (size_t i = 0; i < k; ++i) {
+    sum += p.part_size(i);
+  }
+  RC_ASSERT(sum == data.size());
+})
+
+TEST_PROPERTY(
+    "can use all operations on a bidirectional list partitioning",
+    [](std::list<int> data) {
+      partitioning<std::list<int>::iterator> p(data.begin(), data.end());
+      testgen::generate_splits(p);
+
+      const size_t k = p.parts_count();
+      RC_PRE(k >= size_t{2});
+      const size_t i = *rc::gen::inRange<size_t>(0, k - 1);
+
+      // We just want to check that all operations are correctly instantiated.
+
+      (void)p.part(i);
+      (void)p.is_part_empty(i);
+      (void)p.part_size(i); // O(N) complexity
+
+      if (!p.is_part_empty(i + 1)) {
+        p.grow(i);
+      }
+      if (!p.is_part_empty(i + 1)) {
+        p.grow_by(i, 1);
+      }
+      if (!p.is_part_empty(i)) {
+        p.shrink(i);
+      }
+      if (!p.is_part_empty(i)) {
+        p.shrink_by(i, 1);
+      }
+      p.add_part_end(i);
+      p.add_part_begin(i);
+      p.add_parts_end(i, 2);
+      p.add_parts_begin(i, 2);
+      p.remove_part(i);
     }
 )
 
 TEST_PROPERTY(
-    "forward_list basic ops: grow/grow_by/add/remove",
-    [](forward_list_partitioning<int> fp) {
-      const auto k0 = fp.partitioning_.parts_count();
-      RC_PRE(k0 >= 1);
+    "bidirectional list: growing a part increases its size by 1",
+    [](std::list<int> data) {
+      partitioning<std::list<int>::iterator> p(data.begin(), data.end());
+      testgen::generate_splits(p);
+      const size_t k = p.parts_count();
+      RC_PRE(k >= size_t{2});
+      const size_t i = *rc::gen::inRange<size_t>(0, k - 1);
+      RC_PRE(!p.is_part_empty(i + 1));
+      const size_t old_size = p.part_size(i);
+      p.grow(i);
+      RC_ASSERT(p.part_size(i) == old_size + 1);
+    }
+)
 
-      // add_part_begin at a random index
-      const size_t idx_add = *rc::gen::inRange<size_t>(0, k0);
-      fp.partitioning_.add_part_begin(idx_add);
-      RC_ASSERT(fp.partitioning_.is_part_empty(idx_add));
-
-      // ensure we have at least two parts to operate grow/grow_by
-      const auto k1 = fp.partitioning_.parts_count();
-      RC_PRE(k1 >= 2);
-
-      // pick an index with non-empty next part for grow
-      size_t idx_grow = 0;
-      bool found = false;
-      for (size_t i = 0; i + 1 < k1; ++i) {
-        auto next = fp.partitioning_.part(i + 1);
-        if (next.first != next.second) {
-          idx_grow = i;
-          found = true;
-          break;
-        }
-      }
-      RC_PRE(found);
-
-      // measure sizes
-      auto cur = fp.partitioning_.part(idx_grow);
-      auto nxt = fp.partitioning_.part(idx_grow + 1);
-      const size_t cur_before = std::distance(cur.first, cur.second);
-      const size_t nxt_before = std::distance(nxt.first, nxt.second);
-
-      fp.partitioning_.grow(idx_grow);
-
-      cur = fp.partitioning_.part(idx_grow);
-      nxt = fp.partitioning_.part(idx_grow + 1);
-      RC_ASSERT(std::distance(cur.first, cur.second) == cur_before + 1);
-      RC_ASSERT(std::distance(nxt.first, nxt.second) == nxt_before - 1);
-
-      // grow_by on possibly different index
-      size_t idx_grow_by = idx_grow;
-      size_t max_grow = 0;
-      for (size_t i = 0; i + 1 < k1; ++i) {
-        auto next2 = fp.partitioning_.part(i + 1);
-        const size_t ns = std::distance(next2.first, next2.second);
-        if (ns > max_grow) {
-          max_grow = ns;
-          idx_grow_by = i;
-        }
-      }
-      RC_PRE(max_grow > size_t(0));
-      const size_t n = *rc::gen::inRange<size_t>(1, max_grow + 1);
-      auto cur2 = fp.partitioning_.part(idx_grow_by);
-      auto nxt2 = fp.partitioning_.part(idx_grow_by + 1);
-      const size_t cur2_before = std::distance(cur2.first, cur2.second);
-      const size_t nxt2_before = std::distance(nxt2.first, nxt2.second);
-      fp.partitioning_.grow_by(idx_grow_by, n);
-      cur2 = fp.partitioning_.part(idx_grow_by);
-      nxt2 = fp.partitioning_.part(idx_grow_by + 1);
-      RC_ASSERT(std::distance(cur2.first, cur2.second) == cur2_before + n);
-      RC_ASSERT(std::distance(nxt2.first, nxt2.second) == nxt2_before - n);
-
-      // remove_part at valid index (>0)
-      const auto k2 = fp.partitioning_.parts_count();
-      RC_PRE(k2 >= 2);
-      const size_t idx_rem = *rc::gen::inRange<size_t>(1, k2);
-      auto left = fp.partitioning_.part(idx_rem - 1);
-      auto rem = fp.partitioning_.part(idx_rem);
-      const size_t expected =
-          std::distance(left.first, left.second) + std::distance(rem.first, rem.second);
-      fp.partitioning_.remove_part(idx_rem);
-      auto after_left = fp.partitioning_.part(idx_rem - 1);
-      RC_ASSERT(std::distance(after_left.first, after_left.second) == expected);
-      RC_ASSERT(fp.partitioning_.parts_count() == k2 - 1);
-      return true;
+TEST_PROPERTY(
+    "bidirectional list: shrinking a part decreases its size by 1",
+    [](std::list<int> data) {
+      partitioning<std::list<int>::iterator> p(data.begin(), data.end());
+      testgen::generate_splits(p);
+      const size_t k = p.parts_count();
+      RC_PRE(k >= size_t{2});
+      const size_t i = *rc::gen::inRange<size_t>(0, k - 1);
+      RC_PRE(!p.is_part_empty(i));
+      const size_t old_size = p.part_size(i);
+      p.shrink(i);
+      RC_ASSERT(p.part_size(i) == old_size - 1);
     }
 )

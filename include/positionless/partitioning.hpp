@@ -12,7 +12,8 @@ namespace positionless {
 /// A separation of some collection into multiple contiguous parts.
 ///
 /// A partitioning is constructed from a range defined by a pair of iterators.
-/// The range must remain valid for the lifetime of the partitioning.
+/// The range must remain valid for the lifetime of the partitioning and the iterators given to
+/// constructor most not be invalidated.
 ///
 /// - Invariant: parts_count() >= 1
 template <std::forward_iterator Iterator> class partitioning {
@@ -30,35 +31,34 @@ public:
   [[nodiscard]]
   size_t parts_count() const noexcept;
 
-  /// Returns the iterators delimiting the part at index `part_index`.
+  /// Returns the iterators delimiting the part `part_index`.
   ///
   /// - Precondition: `part_index < parts_count()`
   [[nodiscard]]
   std::pair<Iterator, Iterator> part(size_t part_index) const noexcept;
 
-  /// Returns `true` if the part at index `part_index` is empty.
+  /// Returns `true` if the part `part_index` is empty.
   ///
   /// - Precondition: `part_index < parts_count()`
   [[nodiscard]]
   bool is_part_empty(size_t part_index) const noexcept;
 
-  /// Returns the size of the part at index `part_index`.
+  /// Returns the size of the part `part_index`.
   ///
   /// Defined only for random access collections.
   ///
-  /// - Precondition: `part_index < parts_count()`
+  /// Complexity: O(1) for random access iterators, O(n) otherwise.
   [[nodiscard]]
-  size_t part_size(size_t part_index) const
-    requires std::random_access_iterator<Iterator>;
+  size_t part_size(size_t part_index) const;
 
-  /// Increases the size of the part at index `part_index` by moving its end
+  /// Increases the size of the part `part_index` by moving its end
   /// boundary forward by one element, and decreasing the size of the next part.
   ///
   /// - Precondition: `part_index + 1 < parts_count()`
   /// - Precondition: !is_part_empty(part_index + 1)
   void grow(size_t part_index);
 
-  /// Increases the size of the part at index `part_index` by moving its end
+  /// Increases the size of the part `part_index` by moving its end
   /// boundary forward by `n` elements, and decreasing the size of the next part.
   ///
   /// - Precondition: `part_index + 1 < parts_count()`
@@ -86,11 +86,28 @@ public:
   /// - Precondition: `part_index < parts_count()`
   void add_parts_begin(size_t part_index, size_t count);
 
-  /// Removes the part at index `part_index`, growing the previous part to
+  /// Removes the part `part_index`, growing the previous part to
   /// cover its range.
   ///
   /// - Precondition: `0 < part_index < parts_count()`
   void remove_part(size_t part_index);
+
+  /// Decreases the size of the part `part_index` by moving its end
+  /// boundary back by one element, and increasing the size of the next part.
+  ///
+  /// - Precondition: `part_index + 1 < parts_count()`
+  /// - Precondition: !is_part_empty(part_index)
+  void shrink(size_t part_index)
+    requires std::bidirectional_iterator<Iterator>;
+
+  /// Decreases the size of the part `part_index` by moving its end
+  /// boundary back by `n` elements, and increasing the size of the next part.
+  ///
+  /// - Precondition: `part_index + 1 < parts_count()`
+  /// - Precondition: size of part `part_index` >= `n`
+  /// - Complexity: O(n) for bidirectional iterators, O(1) for random access iterators
+  void shrink_by(size_t part_index, size_t n)
+    requires std::bidirectional_iterator<Iterator>;
 
 private:
   /// The boundaries of each part in the partitioning.
@@ -115,8 +132,8 @@ inline size_t partitioning<Iterator>::parts_count() const noexcept {
 }
 
 template <std::forward_iterator Iterator>
-inline std::pair<Iterator, Iterator>
-partitioning<Iterator>::part(size_t part_index) const noexcept {
+inline std::pair<Iterator, Iterator> partitioning<Iterator>::part(size_t part_index
+) const noexcept {
   PRECONDITION(part_index < parts_count());
   return {boundaries_[part_index], boundaries_[part_index + 1]};
 }
@@ -129,11 +146,9 @@ inline bool partitioning<Iterator>::is_part_empty(size_t part_index) const noexc
 }
 
 template <std::forward_iterator Iterator>
-inline size_t partitioning<Iterator>::part_size(size_t part_index) const
-  requires std::random_access_iterator<Iterator>
-{
+inline size_t partitioning<Iterator>::part_size(size_t part_index) const {
   PRECONDITION(part_index < parts_count());
-  return static_cast<size_t>(boundaries_[part_index + 1] - boundaries_[part_index]);
+  return std::distance(boundaries_[part_index], boundaries_[part_index + 1]);
 }
 
 template <std::forward_iterator Iterator>
@@ -189,6 +204,35 @@ template <std::forward_iterator Iterator>
 inline void partitioning<Iterator>::remove_part(size_t part_index) {
   PRECONDITION(part_index < parts_count());
   boundaries_.erase(boundaries_.begin() + part_index);
+}
+
+template <std::forward_iterator Iterator>
+inline void partitioning<Iterator>::shrink(size_t part_index)
+  requires std::bidirectional_iterator<Iterator>
+{
+  PRECONDITION(part_index + 1 < parts_count());
+  PRECONDITION(!is_part_empty(part_index));
+  boundaries_[part_index + 1]--;
+}
+
+template <std::forward_iterator Iterator>
+inline void partitioning<Iterator>::shrink_by(size_t part_index, size_t n)
+  requires std::bidirectional_iterator<Iterator>
+{
+  PRECONDITION(part_index + 1 < parts_count());
+
+  if constexpr (std::random_access_iterator<Iterator>) {
+    // For random access iterators, we can check size and advance in O(1)
+    auto [begin, end] = part(part_index);
+    PRECONDITION(static_cast<size_t>(std::distance(begin, end)) >= n);
+    boundaries_[part_index + 1] -= n;
+  } else {
+    // For bidirectional iterators, we need to check and advance step by step
+    for (size_t i = 0; i < n; ++i) {
+      PRECONDITION(!is_part_empty(part_index));
+      boundaries_[part_index + 1]--;
+    }
+  }
 }
 
 } // namespace positionless

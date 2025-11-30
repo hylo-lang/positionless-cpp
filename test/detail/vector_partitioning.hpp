@@ -1,5 +1,6 @@
 #pragma once
 
+#include "partitioning_generators.hpp"
 #include "positionless/partitioning.hpp"
 #include "rapidcheck_wrapper.hpp"
 
@@ -34,36 +35,8 @@ template <typename T> struct Arbitrary<vector_partitioning<T>> {
     return gen::exec([]() {
       const auto n = *gen::inRange<size_t>(0, 64);
       auto data = *gen::container<std::vector<T>>(n, gen::arbitrary<T>());
-
-      const auto maxK = std::max<size_t>(1, n == 0 ? 4 : std::min<size_t>(n, 8));
-      const auto k = *gen::inRange<size_t>(1, maxK + 1);
-
-      // Initially have only one part covering all data.
-      vector_partitioning<T> r(std::move(data), 1);
-
-      if (k == 1) {
-        return r;
-      }
-
-      // Generate k+1 cut points in [0, n], include 0 and n, sort.
-      std::vector<size_t> sizes =
-          *gen::container<std::vector<size_t>>(k - 1, gen::inRange<size_t>(0, n + 1));
-      sizes.push_back(0);
-      sizes.push_back(n);
-      std::sort(sizes.begin(), sizes.end());
-
-      // Transform in-place to adjacent differences;
-      // erase the first element (0), and the last element (to n).
-      std::adjacent_difference(sizes.begin(), sizes.end(), sizes.begin());
-      sizes.erase(sizes.begin());
-      sizes.pop_back();
-
-      // Add the parts, with the generated sizes.
-      for (size_t part_len : sizes) {
-        r.partitioning_.add_part_begin(r.partitioning_.parts_count() - 1);
-        r.partitioning_.grow_by(r.partitioning_.parts_count() - 2, part_len);
-      }
-
+      vector_partitioning<T> r(std::move(data));
+      testgen::generate_splits(r.partitioning_);
       return r;
     });
   }
