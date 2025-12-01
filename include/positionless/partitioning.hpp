@@ -45,8 +45,6 @@ public:
 
   /// Returns the size of the part `part_index`.
   ///
-  /// Defined only for random access collections.
-  ///
   /// Complexity: O(1) for random access iterators, O(n) otherwise.
   [[nodiscard]]
   size_t part_size(size_t part_index) const;
@@ -62,7 +60,7 @@ public:
   /// boundary forward by `n` elements, and decreasing the size of the next part.
   ///
   /// - Precondition: `part_index + 1 < parts_count()`
-  /// - Precondition: size of part `part_index + 1` >= `n`
+  /// - Precondition: `part_size(part_index + 1) >= n`
   /// - Complexity: O(n) for forward iterators, O(1) for random access iterators
   void grow_by(size_t part_index, size_t n);
 
