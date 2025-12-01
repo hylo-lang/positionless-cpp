@@ -10,49 +10,43 @@
 using positionless::partitioning;
 
 TEST_PROPERTY("parts of a partitioning cover the entire data", [](vector_partitioning<int> vp) {
-  const auto k = vp.partitioning_.parts_count();
+  const size_t k = vp.partitioning_.parts_count();
   size_t sum = 0;
   for (size_t i = 0; i < k; ++i) {
     sum += vp.partitioning_.part_size(i);
   }
   RC_ASSERT(sum == vp.data_.size());
-  return true;
 })
 
 TEST_PROPERTY("partitioning allows accessing all the elements", [](vector_partitioning<int> vp) {
-  const auto k = vp.partitioning_.parts_count();
+  const size_t k = vp.partitioning_.parts_count();
   std::vector<int> reconstructed;
   for (size_t i = 0; i < k; ++i) {
     const auto part = vp.partitioning_.part(i);
     reconstructed.insert(reconstructed.end(), part.first, part.second);
   }
   RC_ASSERT(reconstructed == vp.data_);
-  return true;
 })
 
 TEST_PROPERTY(
     "partitioning part count matches vector_partitioning",
-    [](vector_partitioning<int> vp) {
-      RC_ASSERT(vp.partitioning_.parts_count() >= size_t(1));
-      return true;
-    }
+    [](vector_partitioning<int> vp) { RC_ASSERT(vp.partitioning_.parts_count() >= size_t(1)); }
 )
 
 TEST_PROPERTY(
     "`is_part_empty` returns true for empty parts, and false otherwise",
     [](vector_partitioning<int> vp) {
-      const auto k = vp.partitioning_.parts_count();
+      const size_t k = vp.partitioning_.parts_count();
       for (size_t i = 0; i < k; ++i) {
         const bool empty = vp.partitioning_.is_part_empty(i);
         const size_t size = vp.partitioning_.part_size(i);
         RC_ASSERT(empty == (size == 0));
       }
-      return true;
     }
 )
 
 TEST_PROPERTY("`grow` increases the size of a part by 1", [](vector_partitioning<int> vp) {
-  const auto k = vp.partitioning_.parts_count();
+  const size_t k = vp.partitioning_.parts_count();
   RC_PRE(k >= size_t(2));
 
   // Find a valid index where next part is non-empty
@@ -73,7 +67,6 @@ TEST_PROPERTY("`grow` increases the size of a part by 1", [](vector_partitioning
 
   RC_ASSERT(after == before + 1);
   RC_ASSERT(next_after == next_before - 1);
-  return true;
 })
 
 TEST_PROPERTY("`grow_by` increases the size of a part by `n`", [](vector_partitioning<int> vp) {
@@ -103,11 +96,10 @@ TEST_PROPERTY("`grow_by` increases the size of a part by `n`", [](vector_partiti
 
   RC_ASSERT(after == before + n);
   RC_ASSERT(next_after == next_before - n);
-  return true;
 })
 
 TEST_PROPERTY("`shrink` decreases the size of a part by 1", [](vector_partitioning<int> vp) {
-  const auto k = vp.partitioning_.parts_count();
+  const size_t k = vp.partitioning_.parts_count();
   RC_PRE(k >= size_t(2));
 
   // Find a valid index where current part is non-empty
@@ -128,11 +120,10 @@ TEST_PROPERTY("`shrink` decreases the size of a part by 1", [](vector_partitioni
 
   RC_ASSERT(after == before - 1);
   RC_ASSERT(next_after == next_before + 1);
-  return true;
 })
 
 TEST_PROPERTY("`shrink_by` decreases the size of a part by `n`", [](vector_partitioning<int> vp) {
-  const auto k = vp.partitioning_.parts_count();
+  const size_t k = vp.partitioning_.parts_count();
   RC_PRE(k >= size_t{2});
 
   // Find a valid index where current part is non-empty
@@ -158,7 +149,6 @@ TEST_PROPERTY("`shrink_by` decreases the size of a part by `n`", [](vector_parti
 
   RC_ASSERT(after == before - n);
   RC_ASSERT(next_after == next_before + n);
-  return true;
 })
 
 TEST_PROPERTY(
@@ -188,7 +178,6 @@ TEST_PROPERTY(
 
       RC_ASSERT(after == before);
       RC_ASSERT(next_after == next_before);
-      return true;
     }
 )
 
@@ -226,14 +215,47 @@ TEST_PROPERTY(
       for (size_t i = 0; i < copy1.partitioning_.parts_count(); ++i) {
         RC_ASSERT(copy1.partitioning_.part_size(i) == copy2.partitioning_.part_size(i));
       }
-      return true;
+    }
+)
+
+TEST_PROPERTY(
+    "`transfer_to_prev` transfers all elements of a part to the previous part",
+    [](vector_partitioning<int> vp) {
+      const size_t k = vp.partitioning_.parts_count();
+      RC_PRE(k >= size_t{2});
+      const size_t idx = *rc::gen::inRange<size_t>(1, k);
+
+      const size_t size_before = vp.partitioning_.part_size(idx);
+      const size_t prev_size_before = vp.partitioning_.part_size(idx - 1);
+      vp.partitioning_.transfer_to_prev(idx);
+
+      RC_ASSERT(vp.partitioning_.parts_count() == k);
+      RC_ASSERT(vp.partitioning_.is_part_empty(idx));
+      RC_ASSERT(vp.partitioning_.part_size(idx - 1) == prev_size_before + size_before);
+    }
+)
+
+TEST_PROPERTY(
+    "`transfer_to_next` transfers all elements of a part to the next part",
+    [](vector_partitioning<int> vp) {
+      const size_t k = vp.partitioning_.parts_count();
+      RC_PRE(k >= size_t{2});
+      const size_t idx = *rc::gen::inRange<size_t>(0, k - 1);
+
+      const size_t size_before = vp.partitioning_.part_size(idx);
+      const size_t next_size_before = vp.partitioning_.part_size(idx + 1);
+      vp.partitioning_.transfer_to_next(idx);
+
+      RC_ASSERT(vp.partitioning_.parts_count() == k);
+      RC_ASSERT(vp.partitioning_.is_part_empty(idx));
+      RC_ASSERT(vp.partitioning_.part_size(idx + 1) == next_size_before + size_before);
     }
 )
 
 TEST_PROPERTY(
     "`add_part_end` adds a new empty part at the end `part_index`",
     [](vector_partitioning<int> vp) {
-      const auto k = vp.partitioning_.parts_count();
+      const size_t k = vp.partitioning_.parts_count();
       const size_t idx = *rc::gen::inRange<size_t>(0, k);
 
       const size_t size_before = vp.partitioning_.part_size(idx);
@@ -242,14 +264,13 @@ TEST_PROPERTY(
       RC_ASSERT(vp.partitioning_.parts_count() == k + 1);
       RC_ASSERT(vp.partitioning_.part_size(idx) == size_before);
       RC_ASSERT(vp.partitioning_.is_part_empty(idx + 1));
-      return true;
     }
 )
 
 TEST_PROPERTY(
     "`add_part_begin` adds a new empty part at the begin `part_index`",
     [](vector_partitioning<int> vp) {
-      const auto k = vp.partitioning_.parts_count();
+      const size_t k = vp.partitioning_.parts_count();
       const size_t idx = *rc::gen::inRange<size_t>(0, k);
 
       const size_t size_before = vp.partitioning_.part_size(idx);
@@ -258,14 +279,13 @@ TEST_PROPERTY(
       RC_ASSERT(vp.partitioning_.parts_count() == k + 1);
       RC_ASSERT(vp.partitioning_.is_part_empty(idx));
       RC_ASSERT(vp.partitioning_.part_size(idx + 1) == size_before);
-      return true;
     }
 )
 
 TEST_PROPERTY(
     "`add_parts_end` adds `n` empty parts at the end `part_index`",
     [](vector_partitioning<int> vp) {
-      const auto k = vp.partitioning_.parts_count();
+      const size_t k = vp.partitioning_.parts_count();
       const size_t idx = *rc::gen::inRange<size_t>(0, k);
       const size_t n = *rc::gen::inRange<size_t>(1, 6);
 
@@ -277,14 +297,13 @@ TEST_PROPERTY(
       for (size_t i = 1; i <= n; ++i) {
         RC_ASSERT(vp.partitioning_.is_part_empty(idx + i));
       }
-      return true;
     }
 )
 
 TEST_PROPERTY(
     "`add_parts_begin` adds `n` empty parts at the begin `part_index`",
     [](vector_partitioning<int> vp) {
-      const auto k = vp.partitioning_.parts_count();
+      const size_t k = vp.partitioning_.parts_count();
       const size_t idx = *rc::gen::inRange<size_t>(0, k);
       const size_t n = *rc::gen::inRange<size_t>(1, 6);
 
@@ -296,25 +315,23 @@ TEST_PROPERTY(
         RC_ASSERT(vp.partitioning_.is_part_empty(idx + i));
       }
       RC_ASSERT(vp.partitioning_.part_size(idx + n) == size_before);
-      return true;
     }
 )
 
 TEST_PROPERTY("`remove_part` decreases the number of parts by 1", [](vector_partitioning<int> vp) {
-  const auto k = vp.partitioning_.parts_count();
+  const size_t k = vp.partitioning_.parts_count();
   RC_PRE(k >= size_t{2});
 
   const size_t idx = *rc::gen::inRange<size_t>(1, k);
   vp.partitioning_.remove_part(idx);
 
   RC_ASSERT(vp.partitioning_.parts_count() == k - 1);
-  return true;
 })
 
 TEST_PROPERTY(
     "`remove_part` transfer all the elements of `part_index` to part `part_index-1`",
     [](vector_partitioning<int> vp) {
-      const auto k = vp.partitioning_.parts_count();
+      const size_t k = vp.partitioning_.parts_count();
       RC_PRE(k >= size_t{2});
 
       const size_t idx = *rc::gen::inRange<size_t>(1, k);
@@ -324,7 +341,6 @@ TEST_PROPERTY(
       vp.partitioning_.remove_part(idx);
 
       RC_ASSERT(vp.partitioning_.part_size(idx - 1) == expected_size);
-      return true;
     }
 )
 
@@ -333,7 +349,7 @@ TEST_PROPERTY(
     [](vector_partitioning<int> vp) {
       auto copy1 = vp;
       auto copy2 = vp;
-      const auto k = copy1.partitioning_.parts_count();
+      const size_t k = copy1.partitioning_.parts_count();
       const size_t idx = *rc::gen::inRange<size_t>(0, k);
       const size_t n = *rc::gen::inRange<size_t>(1, 6);
 
@@ -349,7 +365,6 @@ TEST_PROPERTY(
       for (size_t i = 0; i < copy1.partitioning_.parts_count(); ++i) {
         RC_ASSERT(copy1.partitioning_.part_size(i) == copy2.partitioning_.part_size(i));
       }
-      return true;
     }
 )
 
@@ -358,7 +373,7 @@ TEST_PROPERTY(
     [](vector_partitioning<int> vp) {
       auto copy1 = vp;
       auto copy2 = vp;
-      const auto k = copy1.partitioning_.parts_count();
+      const size_t k = copy1.partitioning_.parts_count();
       const size_t idx = *rc::gen::inRange<size_t>(0, k);
       const size_t n = *rc::gen::inRange<size_t>(1, 6);
 
@@ -374,7 +389,6 @@ TEST_PROPERTY(
       for (size_t i = 0; i < copy1.partitioning_.parts_count(); ++i) {
         RC_ASSERT(copy1.partitioning_.part_size(i) == copy2.partitioning_.part_size(i));
       }
-      return true;
     }
 )
 
@@ -382,7 +396,7 @@ TEST_PROPERTY("forward_list partitioning covers entire data", [](std::forward_li
   partitioning<std::forward_list<int>::iterator> p(data.begin(), data.end());
   testgen::generate_splits(p);
 
-  const auto k = p.parts_count();
+  const size_t k = p.parts_count();
   size_t sum = 0;
   for (size_t i = 0; i < k; ++i) {
     sum += p.part_size(i);

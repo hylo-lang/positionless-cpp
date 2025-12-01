@@ -16,6 +16,9 @@ We want to have an implementation of positionless algorithms and a translation f
 - shrinking parts (for bidirectional collections):
   - `shrink`
   - `shrink_by`
+- transferring elements between parts:
+  - `transfer_to_prev`
+  - `transfer_to_next`
 - creation and destruction of parts:
   - `add_part_end` / `add_part_begin`
   - `add_parts_end` / `add_parts_begin`

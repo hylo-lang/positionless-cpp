@@ -64,6 +64,16 @@ public:
   /// - Complexity: O(n) for forward iterators, O(1) for random access iterators
   void grow_by(size_t part_index, size_t n);
 
+  /// Transfers all the elements of `part_index` to part `part_index-1`, making the former empty.
+  ///
+  /// - Precondition: `0 < part_index < parts_count()`
+  void transfer_to_prev(size_t part_index);
+
+  /// Transfers all the elements of `part_index` to part `part_index+1`, making the former empty.
+  ///
+  /// - Precondition: `part_index < parts_count() - 1`
+  void transfer_to_next(size_t part_index);
+
   /// Adds a new empty part at the end of part `part_index`.
   ///
   /// - Precondition: `part_index < parts_count()`
@@ -172,6 +182,21 @@ inline void partitioning<Iterator>::grow_by(size_t part_index, size_t n) {
       boundaries_[part_index + 1]++;
     }
   }
+}
+
+template <std::forward_iterator Iterator>
+inline void partitioning<Iterator>::transfer_to_prev(size_t part_index) {
+  PRECONDITION(0 < part_index);
+  PRECONDITION(part_index < parts_count());
+  // Transfer all elements to previous part by moving the boundary between them
+  boundaries_[part_index] = boundaries_[part_index + 1];
+}
+
+template <std::forward_iterator Iterator>
+inline void partitioning<Iterator>::transfer_to_next(size_t part_index) {
+  PRECONDITION(part_index < parts_count() - 1);
+  // Transfer all elements to next part by moving the boundary between them
+  boundaries_[part_index + 1] = boundaries_[part_index];
 }
 
 template <std::forward_iterator Iterator>
