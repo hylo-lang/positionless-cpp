@@ -26,37 +26,33 @@ public:
   constexpr partitioning(Iterator begin, Iterator end);
 
   /// Returns the number of parts in the partitioning.
-  ///
-  /// - Invariant: `parts_count() >= 1`
   [[nodiscard]]
   size_t parts_count() const noexcept;
 
-  /// Returns the iterators delimiting the part `i`.
+  /// Returns the iterators delimiting the `i`th part.
   ///
   /// - Precondition: `i < parts_count()`
   [[nodiscard]]
   std::pair<Iterator, Iterator> part(size_t i) const noexcept;
 
-  /// Returns `true` if the part `i` is empty.
-  ///
-  /// - Precondition: `i < parts_count()`
+  /// Returns `true` if the `i`th part is empty.
   [[nodiscard]]
   bool is_part_empty(size_t i) const noexcept;
 
-  /// Returns the size of the part `i`.
+  /// Returns the size of the `i`th part.
   ///
   /// Complexity: O(1) for random access iterators, O(n) otherwise.
   [[nodiscard]]
   size_t part_size(size_t i) const;
 
-  /// Increases the size of the part `i` by moving its end
+  /// Increases the size of the `i`th part by moving its end
   /// boundary forward by one element, and decreasing the size of the next part.
   ///
   /// - Precondition: `i + 1 < parts_count()`
   /// - Precondition: !is_part_empty(i + 1)
   void grow(size_t i);
 
-  /// Increases the size of the part `i` by moving its end
+  /// Increases the size of the `i`th part by moving its end
   /// boundary forward by `n` elements, and decreasing the size of the next part.
   ///
   /// - Precondition: `i + 1 < parts_count()`
@@ -64,55 +60,46 @@ public:
   /// - Complexity: O(n) for forward iterators, O(1) for random access iterators
   void grow_by(size_t i, size_t n);
 
-  /// Transfers all the elements of `i` to part `i-1`, making the former empty.
+  /// Transfers all the elements of `i`th part to `i-1`th part, making the former empty.
   ///
   /// - Precondition: `0 < i < parts_count()`
   void transfer_to_prev(size_t i);
 
-  /// Transfers all the elements of `i` to part `i+1`, making the former empty.
+  /// Transfers all the elements of `i`th part to `i+1`th part, making the former empty.
   ///
   /// - Precondition: `i < parts_count() - 1`
   void transfer_to_next(size_t i);
 
-  /// Adds a new empty part at the end of part `i`.
-  ///
-  /// - Precondition: `i < parts_count()`
+  /// Adds a new empty part at the end of the `i`th part.
   void add_part_end(size_t i);
 
-  /// Adds a new empty part at the begin of part `i`.
-  ///
-  /// - Precondition: `i < parts_count()`
+  /// Adds a new empty part at the beginning of the `i`th part.
   void add_part_begin(size_t i);
 
-  /// Adds `count` new empty parts at the end of part `i`.
-  ///
-  /// - Precondition: `i < parts_count()`
+  /// Adds `count` new empty parts at the end of the `i`th part.
   void add_parts_end(size_t i, size_t count);
 
-  /// Adds `count` new empty parts at the begin of part `i`.
-  ///
-  /// - Precondition: `i < parts_count()`
+  /// Adds `count` new empty parts at the beginning of the `i`th part.
   void add_parts_begin(size_t i, size_t count);
 
-  /// Removes the part `i`, growing the previous part to
-  /// cover its range.
+  /// Removes the `i`th part, growing the previous part to cover its range.
   ///
   /// - Precondition: `0 < i < parts_count()`
   void remove_part(size_t i);
 
-  /// Decreases the size of the part `i` by moving its end
-  /// boundary back by one element, and increasing the size of the next part.
+  /// Decreases the size of the `i`th part by moving its end boundary back by one element, and
+  /// increasing the size of the next part.
   ///
   /// - Precondition: `i + 1 < parts_count()`
   /// - Precondition: !is_part_empty(i)
   void shrink(size_t i)
     requires std::bidirectional_iterator<Iterator>;
 
-  /// Decreases the size of the part `i` by moving its end
+  /// Decreases the size of the `i`th part by moving its end
   /// boundary back by `n` elements, and increasing the size of the next part.
   ///
   /// - Precondition: `i + 1 < parts_count()`
-  /// - Precondition: size of part `i` >= `n`
+  /// - Precondition: `part_size(i) >= n`
   /// - Complexity: O(n) for bidirectional iterators, O(1) for random access iterators
   void shrink_by(size_t i, size_t n)
     requires std::bidirectional_iterator<Iterator>;
