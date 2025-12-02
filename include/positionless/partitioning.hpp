@@ -37,11 +37,11 @@ public:
   [[nodiscard]]
   std::pair<Iterator, Iterator> part(size_t part_index) const noexcept;
 
-  /// Returns `true` if the part `part_index` is empty.
+  /// Returns `true` if the part `i` is empty.
   ///
-  /// - Precondition: `part_index < parts_count()`
+  /// - Precondition: `i < parts_count()`
   [[nodiscard]]
-  bool is_part_empty(size_t part_index) const noexcept;
+  bool is_part_empty(size_t i) const noexcept;
 
   /// Returns the size of the part `part_index`.
   ///

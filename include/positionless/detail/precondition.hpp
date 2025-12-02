@@ -2,6 +2,8 @@
 
 #if defined(NDEBUG)
 
+#include <exception>
+
 /// Assert-like precondition check that calls `std::terminate` on failure.
 #define PRECONDITION(expr)                                                                         \
   do {                                                                                             \
