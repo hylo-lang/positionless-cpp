@@ -10,8 +10,8 @@ namespace positionless {
 
 /// Swaps the first element from part `i` with the first element from part `j`.
 ///
-/// - Precondition: `i < parts_count()`
-/// - Precondition: `j < parts_count()`
+/// - Precondition: `i < p.parts_count()`
+/// - Precondition: `j < p.parts_count()`
 /// - Precondition: parts `i` and `j` are not empty
 template <std::forward_iterator Iterator>
 inline void swap_first(partitioning<Iterator>& p, size_t i, size_t j) {
