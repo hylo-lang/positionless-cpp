@@ -51,6 +51,7 @@ add_executable(unit_tests
     test/tests_main.cpp
     test/partitioning_tests.cpp
     test/algorithms_tests.cpp
+    test/translation_tests.cpp
 )
 target_link_libraries(unit_tests PRIVATE positionless doctest::doctest rapidcheck)
 
