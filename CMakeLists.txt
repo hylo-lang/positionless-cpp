@@ -23,6 +23,21 @@ CPMAddPackage(
     VERSION 2.4.12
 )
 
+# Add RapidCheck for property-based testing
+CPMAddPackage(
+    NAME rapidcheck
+    GITHUB_REPOSITORY emil-e/rapidcheck
+    GIT_TAG master
+    OPTIONS "RC_ENABLE_TESTS OFF" "RC_ENABLE_EXAMPLES OFF"
+)
+
+# Suppress deprecation warnings originating from RapidCheck headers only
+if (TARGET rapidcheck)
+    target_compile_options(rapidcheck INTERFACE
+        $<$<CXX_COMPILER_ID:Clang,AppleClang,GNU>:-Wno-deprecated-declarations>
+    )
+endif()
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_library(positionless INTERFACE)
@@ -32,12 +47,12 @@ target_compile_options(positionless INTERFACE
     $<$<CXX_COMPILER_ID:MSVC>:/W4>
 )
 
-add_executable(unit_tests test/partitioning_tests.cpp)
-target_link_libraries(unit_tests PRIVATE positionless doctest::doctest)
-target_compile_options(unit_tests PRIVATE
-    $<$<CXX_COMPILER_ID:Clang,AppleClang,GNU>:-Wall -Wextra -Wpedantic>
-    $<$<CXX_COMPILER_ID:MSVC>:/W4>
+add_executable(unit_tests
+    test/tests_main.cpp
+    test/partitioning_tests.cpp
+    test/algorithms_tests.cpp
 )
+target_link_libraries(unit_tests PRIVATE positionless doctest::doctest rapidcheck)
 
 enable_testing()
 add_test(NAME unit_tests COMMAND unit_tests)
