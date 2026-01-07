@@ -45,7 +45,7 @@ public:
   /// - Precondition: iterator `iterator_index` is valid.
   size_t copy_iterator(size_t iterator_index);
 
-  /// Marks the iterator at `iterator_index` as destroyed / not valid.
+  /// Removes iterator at `iterator_index` from algorithm data.
   ///
   /// - Precondition: iterator `iterator_index` is valid.
   void destroy_iterator(size_t iterator_index);
