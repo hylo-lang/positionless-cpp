@@ -47,6 +47,7 @@ public:
 
   /// Removes iterator at `iterator_index` from algorithm data.
   ///
+  /// - Precondition: `iterator_index > 1`.
   /// - Precondition: iterator `iterator_index` is valid.
   void destroy_iterator(size_t iterator_index);
 
