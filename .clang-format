@@ -11,3 +11,4 @@ AllowAllParametersOfDeclarationOnNextLine: true
 BinPackArguments: false
 BinPackParameters: false
 AlignAfterOpenBracket: BlockIndent
+AlwaysBreakTemplateDeclarations: Yes

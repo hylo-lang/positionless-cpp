@@ -16,7 +16,8 @@ namespace positionless {
 /// constructor most not be invalidated.
 ///
 /// - Invariant: parts_count() >= 1
-template <std::forward_iterator Iterator> class partitioning {
+template <std::forward_iterator Iterator>
+class partitioning {
 public:
   using iterator = Iterator;
   using value_type = std::iter_value_t<Iterator>;
@@ -74,12 +75,20 @@ public:
   void add_part_end(size_t i);
 
   /// Adds a new empty part at the beginning of the `i`th part.
+  ///
+  /// Equivalent to `add_part_end(parts_count() - 1)` if `i == parts_count()`.
+  ///
+  /// - Precondition: `i <= parts_count()`
   void add_part_begin(size_t i);
 
   /// Adds `count` new empty parts at the end of the `i`th part.
   void add_parts_end(size_t i, size_t count);
 
   /// Adds `count` new empty parts at the beginning of the `i`th part.
+  ///
+  /// Equivalent to `add_parts_end(parts_count() - 1, count)` if `i == parts_count()`.
+  ///
+  /// - Precondition: `i <= parts_count()`
   void add_parts_begin(size_t i, size_t count);
 
   /// Removes the `i`th part, growing the previous part to cover its range.
@@ -145,7 +154,8 @@ inline size_t partitioning<Iterator>::part_size(size_t i) const {
   return std::distance(boundaries_[i], boundaries_[i + 1]);
 }
 
-template <std::forward_iterator Iterator> inline void partitioning<Iterator>::grow(size_t i) {
+template <std::forward_iterator Iterator>
+inline void partitioning<Iterator>::grow(size_t i) {
   PRECONDITION(i + 1 < parts_count());
   PRECONDITION(!is_part_empty(i + 1));
   boundaries_[i + 1]++;
@@ -192,7 +202,7 @@ inline void partitioning<Iterator>::add_part_end(size_t i) {
 
 template <std::forward_iterator Iterator>
 inline void partitioning<Iterator>::add_part_begin(size_t i) {
-  PRECONDITION(i < parts_count());
+  PRECONDITION(i <= parts_count());
   boundaries_.insert(boundaries_.begin() + i, boundaries_[i]);
 }
 
@@ -204,7 +214,7 @@ inline void partitioning<Iterator>::add_parts_end(size_t i, size_t count) {
 
 template <std::forward_iterator Iterator>
 inline void partitioning<Iterator>::add_parts_begin(size_t i, size_t count) {
-  PRECONDITION(i < parts_count());
+  PRECONDITION(i <= parts_count());
   boundaries_.insert(boundaries_.begin() + i, count, boundaries_[i]);
 }
 
